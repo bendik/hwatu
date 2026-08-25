@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Push IPC: server-initiated events on persistent connections
 //! (roadmap G2). A client sends `subscribe` and holds the socket

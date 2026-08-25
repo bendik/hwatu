@@ -3,7 +3,7 @@
 # hwatu
 
 [![Latest Release](https://badgen.net/github/release/hongnoul/hwatu?icon=github)](https://github.com/hongnoul/hwatu/releases)
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![CI](https://github.com/hongnoul/hwatu/actions/workflows/ci.yml/badge.svg)](https://github.com/hongnoul/hwatu/actions/workflows/ci.yml)
 
 **Your agents are blind without hwatu**
@@ -310,4 +310,4 @@ or [report a bug](https://github.com/hongnoul/hwatu/issues/new?template=bug-repo
 
 ---
 
-AGPL-3.0 licensed. Linux. WebKitGTK 6.
+MIT licensed. Linux. WebKitGTK 6.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Budgeted snapshots (verification P3 item 12): degrade a snapshot
 //! reply coarse-to-fine to fit a character budget, instead of

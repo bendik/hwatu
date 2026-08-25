@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Crash resilience: the daemon owns every window, so a daemon crash
 //! (or OOM kill, or logout) used to take the whole browsing session

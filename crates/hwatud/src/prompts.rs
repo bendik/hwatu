@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Interactive prompts: permission requests and TLS failures, answered
 //! with a y/n keypress on the bar. One pending prompt at a time per

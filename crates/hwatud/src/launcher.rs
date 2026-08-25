@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! The launcher page: what a bare `hwatu` shows instead of a blank
 //! window. A single hanafuda card, dealt in deck order: each new

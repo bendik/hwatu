@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Browser window: one WebView per toplevel, zero chrome.
 //! The tiling WM is the tab bar.

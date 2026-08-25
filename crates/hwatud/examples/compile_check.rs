@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Bisect helper: find converted rules WebKit's compiler rejects.
 //! Usage: cargo run --example compile_check -p hwatud -- <list.txt>...

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Theme continuity (roadmap H37): follow the desktop's color scheme
 //! so pages' `prefers-color-scheme` resolves like every native app's.

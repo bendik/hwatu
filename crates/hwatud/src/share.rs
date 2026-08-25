@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Share sheet (roadmap H36): hand the current page URL to
 //! user-configured commands, `~/.config/hwatu/share.conf`:

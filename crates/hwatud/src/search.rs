@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Search-engine fallback: bar/CLI input that doesn't look like a URL
 //! becomes a web search. Plus (roadmap H13) per-engine search

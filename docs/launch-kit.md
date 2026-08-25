@@ -59,7 +59,7 @@ All measurements are Linux/WebKitGTK results on the machine documented in
 >
 > It includes pixel-diff scores and regions, deterministic animation inspection,
 > structured console/network errors, CLI, JSON socket, and MCP interfaces. It is
-> AGPL-3.0 and Linux-only today. Playwright still wins in several areas, including
+> MIT and Linux-only today. Playwright still wins in several areas, including
 > cross-browser coverage and cold start, so the README includes the caveats and
 > reproducible benchmarks.
 >
@@ -89,7 +89,7 @@ project directly answers an existing discussion.
 >
 > It is written in Rust, uses system WebKitGTK, supports CLI/JSON/MCP, and includes
 > built-in pixel diffs, animation measurements, assertions, console capture, and
-> structured interaction errors. AGPL-3.0, currently Linux-only.
+> structured interaction errors. MIT, currently Linux-only.
 >
 > Demo, measurements, caveats, and source:
 > https://github.com/hongnoul/hwatu
@@ -107,7 +107,7 @@ project directly answers an existing discussion.
 > • live hand-off of the same session from agent to human and back  
 > • CLI, JSON socket, and MCP interfaces
 >
-> It is a Rust/WebKitGTK project for Linux, released under AGPL-3.0. The repository
+> It is a Rust/WebKitGTK project for Linux, released under MIT. The repository
 > includes reproducible benchmarks and the cases where Playwright remains the
 > better choice.
 >
@@ -124,7 +124,7 @@ project directly answers an existing discussion.
 > I built Hwatu: a verification browser for AI coding agents. One call loads,
 > inspects, and screenshots a real page in ~35 ms. It stays invisible until a
 > human is needed, then hands over the same live session and takes it back.
-> Rust + WebKitGTK, AGPL, Linux. https://github.com/hongnoul/hwatu
+> Rust + WebKitGTK, MIT, Linux. https://github.com/hongnoul/hwatu
 
 **Thread outline**
 

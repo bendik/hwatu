@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Password-manager fill (roadmap H11): first-class fill from `pass`
 //! and Bitwarden's `bw` CLI. hwatu integrates, never stores — no

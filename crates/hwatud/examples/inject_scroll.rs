@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Inject real compositor-level touchpad scrolling for smoothwheel
 //! verification. Creates a wlr virtual pointer, moves it over the

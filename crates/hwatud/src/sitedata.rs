@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Persistent per-site decisions (roadmap H5): permission grants and
 //! per-site zoom, one JSON file in the XDG data dir.

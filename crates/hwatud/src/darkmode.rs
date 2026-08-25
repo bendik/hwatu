@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Forced dark mode (roadmap H15): a prefers-color-scheme override
 //! plus an injected-CSS darkener, per-site toggleable, persisted on
