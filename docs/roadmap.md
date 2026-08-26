@@ -22,6 +22,12 @@ share product policy. The browser may optimize human navigation without adding
 browser-shell concepts to agent verification; verification may optimize
 machine-readable proof without dictating human interaction design.
 
+Platform reach is judged per product, not per OS. macOS is a verification-only
+target: the measured probes and competitive analysis in
+[research-macos-headless.md](research-macos-headless.md) show the instrument
+ports cleanly and is unmatched by competitors, while the browser shell has no
+audience and no working frame clock there.
+
 When shared needs conflict, runtime correctness and compatibility come first,
 then the agent verification loop, then live hand-off, then browser convenience.
 A browser regression that prevents ordinary use is a correctness bug, not a
