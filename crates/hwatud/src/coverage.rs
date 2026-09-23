@@ -6,9 +6,7 @@
 //! primitives (eval machinery, window pool, profiles); nothing maps a
 //! window or requests focus.
 
-use crate::automation::{
-    self, eval_with, js_string, json_or_null, resolve, NavPolicy, Reply,
-};
+use crate::automation::{self, eval_with, js_string, json_or_null, resolve, NavPolicy, Reply};
 use crate::window::BrowserWindow;
 use crate::Daemon;
 use hwatu_ipc::{ContentFormat, FormField, OpenMode, Request, Response, FORK_MAX_COUNT};
@@ -303,11 +301,11 @@ pub fn drop_file(
         })
         .unwrap_or_else(|| "file".to_string());
     let mime = mime.unwrap_or_else(|| guess_mime(&file_name).to_string());
-    let prelude =
-        match automation::target_prelude(Some(&selector), nth, contains.as_deref(), None) {
-            Ok(p) => p,
-            Err(resp) => return automation::send_once(reply, *resp),
-        };
+    let prelude = match automation::target_prelude(Some(&selector), nth, contains.as_deref(), None)
+    {
+        Ok(p) => p,
+        Err(resp) => return automation::send_once(reply, *resp),
+    };
     let js = format!(
         r#"{prelude}
 const B64 = {b64};
@@ -346,7 +344,10 @@ return {{ dropped: matched, name: NAME, mime: MIME, bytes: bytes.length,
 }
 
 fn guess_mime(name: &str) -> &'static str {
-    match name.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase()) {
+    match name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+    {
         Some(ext) => match ext.as_str() {
             "png" => "image/png",
             "jpg" | "jpeg" => "image/jpeg",
@@ -1052,9 +1053,8 @@ pub fn fill_login(
             let _ = tx.send(match kind {
                 hwatu_ipc::LoginFill::Password => crate::passfill::lookup(&host)
                     .map(|credential| crate::passfill::fill_js(&credential)),
-                hwatu_ipc::LoginFill::Otp => {
-                    crate::passfill::lookup_otp(&host).map(|code| crate::passfill::fill_otp_js(&code))
-                }
+                hwatu_ipc::LoginFill::Otp => crate::passfill::lookup_otp(&host)
+                    .map(|code| crate::passfill::fill_otp_js(&code)),
             });
         });
     }

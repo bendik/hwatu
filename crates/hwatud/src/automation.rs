@@ -38,12 +38,7 @@ pub fn once(reply: Reply) -> Rc<dyn Fn(Response)> {
 /// Run `done` once window `id` finishes loading (or `timeout_ms`
 /// expires, whichever first — done runs either way; the caller
 /// decides what "loaded enough" means afterwards).
-pub fn after_load(
-    daemon: &Rc<Daemon>,
-    id: u64,
-    timeout_ms: Option<u64>,
-    done: Box<dyn FnOnce()>,
-) {
+pub fn after_load(daemon: &Rc<Daemon>, id: u64, timeout_ms: Option<u64>, done: Box<dyn FnOnce()>) {
     let done = Rc::new(RefCell::new(Some(done)));
     let fire = {
         let done = done.clone();
@@ -113,7 +108,10 @@ const VIEWPORT_PUMP_JS: &str = "__hwatuNative?.pumpViewport?.();";
 /// normal state for background/headless verification flows).
 /// Genuine ambiguity is still an error rather than a guess: an agent
 /// driving the wrong window is worse than a retry with an id.
-pub(crate) fn resolve(daemon: &Rc<Daemon>, id: Option<u64>) -> Result<Rc<BrowserWindow>, Box<Response>> {
+pub(crate) fn resolve(
+    daemon: &Rc<Daemon>,
+    id: Option<u64>,
+) -> Result<Rc<BrowserWindow>, Box<Response>> {
     let win = resolve_uncached(daemon, id)?;
     daemon.last_target.replace(Some(win.id));
     Ok(win)

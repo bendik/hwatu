@@ -186,9 +186,9 @@ fn wire_download(daemon: &Rc<Daemon>, download: &webkit6::Download) {
         };
         let dest = unique_path(&dir, name);
         download.set_destination(&dest.display().to_string());
-        registry_daemon
-            .downloads
-            .update(record_id, |r| r.destination = Some(dest.display().to_string()));
+        registry_daemon.downloads.update(record_id, |r| {
+            r.destination = Some(dest.display().to_string())
+        });
         true
     });
 

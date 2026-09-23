@@ -1249,10 +1249,8 @@ impl Request {
     /// alternative. Deliberately tiny: quick targeted actions whose
     /// failure is cheap and local.
     pub fn is_try_until_action(&self) -> bool {
-        matches!(
-            self,
-            Request::Click { .. } | Request::Type { .. }
-        ) || matches!(self, Request::Expect { watch: false, .. })
+        matches!(self, Request::Click { .. } | Request::Type { .. })
+            || matches!(self, Request::Expect { watch: false, .. })
     }
 
     /// Validate TryUntil alternatives before any executes.

@@ -744,8 +744,12 @@ impl BrowserWindow {
             None => daemon.take_webview(),
         };
         let this = Self::build(daemon, webview.clone(), app_id.clone(), mode);
-        this.profile
-            .replace(profile.as_deref().filter(|p| !p.is_empty()).map(String::from));
+        this.profile.replace(
+            profile
+                .as_deref()
+                .filter(|p| !p.is_empty())
+                .map(String::from),
+        );
         // No URL and no configured home page: show the launcher (the
         // keybind cheat sheet) with the URL bar already open, so a
         // bare `hwatu` is "type where you want to go".
