@@ -883,12 +883,263 @@ pub enum Request {
         #[serde(default = "default_true")]
         open: bool,
     },
+    /// Extract page content in one call (coverage C2): the raw or
+    /// readable form of the document, without composing an eval by
+    /// hand. `format` selects what comes back in
+    /// [`Response::Ok::value`]: outer HTML, visible text, title, or
+    /// links. `selector` scopes extraction to one element
+    /// (disambiguated by `nth`/`contains`, like Click).
+    GetContent {
+        #[serde(default)]
+        id: Option<u64>,
+        #[serde(default)]
+        format: ContentFormat,
+        /// Scope extraction to this element instead of the document.
+        #[serde(default)]
+        selector: Option<String>,
+        #[serde(default)]
+        nth: Option<u32>,
+        #[serde(default)]
+        contains: Option<String>,
+        /// Character budget for text/html output (default 64 KiB).
+        #[serde(default)]
+        max_chars: Option<usize>,
+        #[serde(default)]
+        timeout_ms: Option<u64>,
+    },
+    /// Fill several form fields in one roundtrip (coverage C2).
+    /// Each field targets an element like [`Request::Type`]
+    /// (selector + optional nth/contains, or a snapshot `ref`) and
+    /// sets a text value, a checkbox/radio state, or a `<select>`
+    /// option, with framework-safe native setters and input/change
+    /// events. Fields apply in order; the first failure stops the
+    /// pass and the reply reports which fields landed. With `submit`,
+    /// the form containing the last field is submitted afterwards.
+    FillForm {
+        #[serde(default)]
+        id: Option<u64>,
+        fields: Vec<FormField>,
+        /// Submit the last field's form after all fields apply.
+        #[serde(default)]
+        submit: bool,
+        #[serde(default)]
+        timeout_ms: Option<u64>,
+    },
+    /// List the daemon's download activity (coverage C5): every
+    /// download this daemon session started, its state (active,
+    /// finished, failed), destination path, received/total bytes.
+    ListDownloads {
+        /// Return at most the last N entries.
+        #[serde(default)]
+        limit: Option<usize>,
+    },
+    /// Simulate dropping a file onto an element (coverage C5): builds
+    /// a DataTransfer holding the file's bytes and dispatches
+    /// dragenter/dragover/drop on the target. Covers upload surfaces
+    /// that have no `<input type=file>` (drop zones). `data` carries
+    /// base64 file bytes for remote transports; otherwise `path` is
+    /// read by the daemon.
+    DropFile {
+        #[serde(default)]
+        id: Option<u64>,
+        selector: String,
+        #[serde(default)]
+        nth: Option<u32>,
+        #[serde(default)]
+        contains: Option<String>,
+        /// File path readable by the daemon.
+        #[serde(default)]
+        path: Option<String>,
+        /// Base64 file bytes (remote transports).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        data: Option<String>,
+        /// File name presented to the page (default: basename of path).
+        #[serde(default)]
+        name: Option<String>,
+        /// MIME type presented to the page (default: guessed or
+        /// application/octet-stream).
+        #[serde(default)]
+        mime: Option<String>,
+        #[serde(default)]
+        timeout_ms: Option<u64>,
+    },
+    /// Report login/session state for an origin (coverage C5):
+    /// whether cookies exist for the host (count, session vs
+    /// persistent, expiry horizon) plus localStorage keys, without
+    /// exposing values. Lets an agent decide "am I logged in?"
+    /// before attempting a flow, and phrase a precise Handoff when
+    /// not.
+    AuthContext {
+        /// Window whose origin to inspect; its page must be loaded.
+        #[serde(default)]
+        id: Option<u64>,
+    },
+    /// Duplicate a live window (coverage C3): a new headless window
+    /// on the same profile (shared cookies/session) navigated to the
+    /// same URL, optionally with scroll position restored. The
+    /// foundation for speculative exploration: fork, try a path,
+    /// keep or kill the fork. Replies with the new window.
+    Fork {
+        /// Source window.
+        #[serde(default)]
+        id: Option<u64>,
+        /// Optional label reported by [`Request::ListForks`].
+        #[serde(default)]
+        name: Option<String>,
+        /// How many forks to create (default 1, max 8). Multi-fork
+        /// replies list every window under `value.forks`.
+        #[serde(default)]
+        count: Option<u32>,
+        #[serde(default)]
+        timeout_ms: Option<u64>,
+    },
+    /// List live forks (coverage C3): window id, name, parent id,
+    /// url, created_at for every window created by Fork and still
+    /// open. Kill one with the ordinary [`Request::Close`].
+    ListForks,
+    /// Try alternative actions until one succeeds (coverage C3):
+    /// a bounded ordered list of click/type/expect steps; the first
+    /// success ends the pass and the reply names the winning index.
+    /// The headless answer to "the login button is one of these
+    /// three selectors".
+    TryUntil {
+        #[serde(default)]
+        id: Option<u64>,
+        /// Candidate actions, tried in order. Only click, type, and
+        /// expect (non-watch) requests are allowed.
+        alternatives: Vec<Request>,
+        /// Overall deadline (default 5000 ms).
+        #[serde(default)]
+        timeout_ms: Option<u64>,
+    },
+    /// Bounded same-host crawl from a URL (coverage C4): loads the
+    /// start page in a pooled headless window, snapshots it, collects
+    /// same-host links, and follows up to `max_pages` of them up to
+    /// `depth` levels, reusing one window. Replies with per-page
+    /// {url, title, snapshot, links}. The reconnaissance verb: map a
+    /// site's structure in one call without a single focus change.
+    Scout {
+        url: String,
+        /// Link-following depth (default 1, max 2).
+        #[serde(default)]
+        depth: Option<u32>,
+        /// Total page budget (default 5, max 10).
+        #[serde(default)]
+        max_pages: Option<u32>,
+        /// Only follow links whose URL or text contains this.
+        #[serde(default)]
+        filter: Option<String>,
+        /// Character budget per page snapshot (default 2000).
+        #[serde(default)]
+        budget: Option<usize>,
+        /// Cookie/site-data profile for the crawl windows.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        profile: Option<String>,
+        #[serde(default)]
+        timeout_ms: Option<u64>,
+    },
+    /// Fill the page's login form from the user's password manager
+    /// (coverage C6): `pass`/`pass otp` or Bitwarden's `bw`. `kind`
+    /// picks what to fill: password (username+password form),
+    /// otp (one-time-code field, via pass-otp or `bw get totp`).
+    /// hwatu integrates, never stores; secrets go page-ward only and
+    /// never appear in the reply.
+    FillLogin {
+        #[serde(default)]
+        id: Option<u64>,
+        kind: LoginFill,
+        /// Override the host used for the store lookup (default: the
+        /// page's current host).
+        #[serde(default)]
+        host: Option<String>,
+        #[serde(default)]
+        timeout_ms: Option<u64>,
+    },
 }
 
 /// Maximum number of actions in one [`Request::Batch`]. This bounds daemon
 /// memory, validation time, and how long one IPC request can occupy the GTK
 /// main loop before giving the caller a progress boundary.
 pub const BATCH_MAX_ACTIONS: usize = 32;
+
+/// Maximum alternatives in one [`Request::TryUntil`].
+pub const TRY_UNTIL_MAX_ALTERNATIVES: usize = 8;
+
+/// Maximum forks one [`Request::Fork`] may create.
+pub const FORK_MAX_COUNT: u32 = 8;
+
+/// Maximum fields in one [`Request::FillForm`].
+pub const FILL_FORM_MAX_FIELDS: usize = 32;
+
+/// What [`Request::FillLogin`] fills.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoginFill {
+    /// Username + password form fill.
+    Password,
+    /// One-time-code field fill (TOTP).
+    Otp,
+}
+
+impl LoginFill {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim() {
+            "password" | "pass" => Some(Self::Password),
+            "otp" | "totp" | "code" => Some(Self::Otp),
+            _ => None,
+        }
+    }
+}
+
+/// What [`Request::GetContent`] returns.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContentFormat {
+    /// Visible text (whitespace-collapsed), the token-cheap default.
+    #[default]
+    Text,
+    /// Serialized outer HTML of the document or scoped element.
+    Html,
+    /// Document title and final URL only.
+    Title,
+    /// De-duplicated anchors: `{url, text}` pairs.
+    Links,
+}
+
+impl ContentFormat {
+    /// Parse a user-facing format name.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim() {
+            "text" => Some(Self::Text),
+            "html" => Some(Self::Html),
+            "title" => Some(Self::Title),
+            "links" => Some(Self::Links),
+            _ => None,
+        }
+    }
+}
+
+/// One field of a [`Request::FillForm`] pass. Exactly one of `value`
+/// and `checked` should be set: `value` types text / selects an
+/// option, `checked` sets a checkbox or radio state.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FormField {
+    #[serde(default)]
+    pub selector: Option<String>,
+    #[serde(default)]
+    pub nth: Option<u32>,
+    #[serde(default)]
+    pub contains: Option<String>,
+    /// Interactable index from the last snapshot of this window.
+    #[serde(default)]
+    pub r#ref: Option<u32>,
+    /// Text to type or `<select>` option (value or label).
+    #[serde(default)]
+    pub value: Option<String>,
+    /// Checkbox/radio state.
+    #[serde(default)]
+    pub checked: Option<bool>,
+}
 
 impl Request {
     /// Stable human-readable variant name for diagnostics and batch results.
@@ -931,6 +1182,16 @@ impl Request {
             Request::Handoff { .. } => "handoff",
             Request::Handoffs { .. } => "handoffs",
             Request::Jump { .. } => "jump",
+            Request::GetContent { .. } => "get_content",
+            Request::FillForm { .. } => "fill_form",
+            Request::ListDownloads { .. } => "list_downloads",
+            Request::DropFile { .. } => "drop_file",
+            Request::AuthContext { .. } => "auth_context",
+            Request::Fork { .. } => "fork",
+            Request::ListForks => "list_forks",
+            Request::TryUntil { .. } => "try_until",
+            Request::Scout { .. } => "scout",
+            Request::FillLogin { .. } => "fill_login",
         }
     }
 
@@ -964,7 +1225,42 @@ impl Request {
                 | Request::Press { .. }
                 | Request::Paste { .. }
                 | Request::Console { .. }
+                | Request::GetContent { .. }
+                | Request::FillForm { .. }
         ) || matches!(self, Request::Expect { watch: false, .. })
+    }
+
+    /// Whether this request may serve as a [`Request::TryUntil`]
+    /// alternative. Deliberately tiny: quick targeted actions whose
+    /// failure is cheap and local.
+    pub fn is_try_until_action(&self) -> bool {
+        matches!(
+            self,
+            Request::Click { .. } | Request::Type { .. }
+        ) || matches!(self, Request::Expect { watch: false, .. })
+    }
+
+    /// Validate TryUntil alternatives before any executes.
+    pub fn validate_try_until(alternatives: &[Request]) -> Result<(), String> {
+        if alternatives.is_empty() {
+            return Err("try_until needs at least one alternative".into());
+        }
+        if alternatives.len() > TRY_UNTIL_MAX_ALTERNATIVES {
+            return Err(format!(
+                "try_until has {} alternatives; the cap is {}",
+                alternatives.len(),
+                TRY_UNTIL_MAX_ALTERNATIVES
+            ));
+        }
+        for (index, alt) in alternatives.iter().enumerate() {
+            if !alt.is_try_until_action() {
+                return Err(format!(
+                    "try_until alternative {index} ({}) is unsupported; allowed: click, type, expect",
+                    alt.kind()
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Validate a batch before any action executes. The daemon calls this

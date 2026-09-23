@@ -69,6 +69,106 @@ pub fn lookup(host: &str) -> Result<Credential, FillError> {
     }
 }
 
+/// Blocking TOTP lookup (coverage C6): the current one-time code for
+/// `host` from `pass otp` (pass-otp extension) or `bw get totp`.
+/// Call from a worker thread; both back ends can block on gpg/agent.
+pub fn lookup_otp(host: &str) -> Result<String, FillError> {
+    match backend_choice().as_deref() {
+        Some("off") => Err(FillError::NoBackend),
+        Some("pass") => pass_otp(host),
+        Some("bitwarden") => bw_otp(host),
+        _ => {
+            if pass_store_dir().is_dir() {
+                pass_otp(host)
+            } else if std::env::var_os("BW_SESSION").is_some() {
+                bw_otp(host)
+            } else {
+                Err(FillError::NoBackend)
+            }
+        }
+    }
+}
+
+fn pass_otp(host: &str) -> Result<String, FillError> {
+    let entry = pass_entry_for(host).ok_or_else(|| FillError::NoEntry(host.to_string()))?;
+    let output = std::process::Command::new("pass")
+        .args(["otp", &entry])
+        .output()
+        .map_err(|e| FillError::Backend(format!("pass not runnable: {e}")))?;
+    if !output.status.success() {
+        return Err(FillError::Backend(format!(
+            "pass otp {entry} failed (no otpauth line, or gpg locked?)"
+        )));
+    }
+    let code = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if code.is_empty() || !code.chars().all(|c| c.is_ascii_digit()) {
+        return Err(FillError::Backend(format!(
+            "pass otp {entry} returned a non-numeric code"
+        )));
+    }
+    Ok(code)
+}
+
+fn bw_otp(host: &str) -> Result<String, FillError> {
+    if std::env::var_os("BW_SESSION").is_none() {
+        return Err(FillError::Backend(
+            "bitwarden vault locked (BW_SESSION not set)".into(),
+        ));
+    }
+    let output = std::process::Command::new("bw")
+        .args(["get", "totp", host])
+        .output()
+        .map_err(|e| FillError::Backend(format!("bw not runnable: {e}")))?;
+    if !output.status.success() {
+        return Err(FillError::NoEntry(host.to_string()));
+    }
+    let code = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if code.is_empty() {
+        return Err(FillError::NoEntry(host.to_string()));
+    }
+    Ok(code)
+}
+
+/// JS that fills the page's one-time-code field. Targets the visible
+/// autocomplete=one-time-code input first, then common code-field
+/// shapes. Same framework-safe setter discipline as `fill_js`.
+pub fn fill_otp_js(code: &str) -> String {
+    let code = serde_json::to_string(code).unwrap_or_else(|_| "\"\"".into());
+    format!(
+        r#"
+const code = {code};
+const visible = (el) => {{
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0;
+}};
+const candidates = [
+  ...document.querySelectorAll('input[autocomplete="one-time-code"]'),
+  ...document.querySelectorAll('input[name*="otp" i], input[id*="otp" i]'),
+  ...document.querySelectorAll('input[name*="totp" i], input[id*="totp" i]'),
+  ...document.querySelectorAll('input[name*="code" i][type="text"], input[name*="code" i][type="tel"], input[name*="code" i][type="number"], input[id*="code" i][inputmode="numeric"]'),
+].filter(visible);
+// Split-digit forms: N single-char boxes, one digit each.
+const boxes = [...document.querySelectorAll('input[maxlength="1"]')].filter(visible);
+const setv = (el, v) => {{
+  const proto = el.constructor.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set
+    || Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  setter.call(el, v);
+  el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+  el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+}};
+if (boxes.length >= 4 && boxes.length <= 10 && boxes.length === code.length) {{
+  boxes.forEach((el, i) => setv(el, code[i]));
+  return {{ filled: 'split', boxes: boxes.length }};
+}}
+const el = candidates[0];
+if (!el) throw new Error('no one-time-code field found');
+el.focus && el.focus();
+setv(el, code);
+return {{ filled: 'single', name: el.name || el.id || null }};"#
+    )
+}
+
 fn backend_choice() -> Option<String> {
     Some(
         crate::window::config_value("password_backend")?

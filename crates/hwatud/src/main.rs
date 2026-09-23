@@ -15,6 +15,7 @@ mod blurshield;
 mod clock;
 mod compositor;
 mod console;
+mod coverage;
 mod darkmode;
 mod downloads;
 mod events;
@@ -87,6 +88,9 @@ pub struct Daemon {
     /// (reason, queued-at). Agents queue via `hwatu handoff`; the
     /// human drains via `hwatu handoffs` on their own schedule.
     pub handoffs: RefCell<Vec<HandoffEntry>>,
+    /// Downloads this daemon session started (coverage C5), for
+    /// `hwatu downloads`.
+    pub downloads: downloads::Registry,
     /// Resolved keybindings (defaults + ~/.config/hwatu/keys.conf).
     pub keymap: keys::Keymap,
     /// Window most recently targeted by an automation command (eval,
@@ -203,6 +207,7 @@ impl Daemon {
             site_store: sitedata::SiteStore::load(!security.ephemeral_profile),
             history: history::History::load(!security.ephemeral_profile),
             handoffs: RefCell::new(Vec::new()),
+            downloads: downloads::Registry::default(),
             keymap: keys::Keymap::load(),
             last_target: RefCell::new(None),
             recently_closed: RefCell::new(Vec::new()),

@@ -536,6 +536,102 @@ pub(crate) fn build_request(name: &str, args: &Value) -> Result<Request, String>
                 window: opt_u64(args, "window"),
             })
         }
+        "get_content" => Ok(Request::GetContent {
+            id,
+            format: match opt_str(args, "format") {
+                None => hwatu_ipc::ContentFormat::default(),
+                Some(v) => hwatu_ipc::ContentFormat::parse(&v)
+                    .ok_or_else(|| format!("invalid format {v:?} (want text|html|title|links)"))?,
+            },
+            selector: opt_str(args, "selector"),
+            nth: opt_u32(args, "nth"),
+            contains: opt_str(args, "contains"),
+            max_chars: opt_u64(args, "max_chars").map(|v| v as usize),
+            timeout_ms,
+        }),
+        "fill_form" => {
+            let entries = args
+                .get("fields")
+                .and_then(Value::as_array)
+                .ok_or("fill_form needs `fields` array")?;
+            let mut fields = Vec::with_capacity(entries.len());
+            for (index, entry) in entries.iter().enumerate() {
+                let field: hwatu_ipc::FormField = serde_json::from_value(entry.clone())
+                    .map_err(|e| format!("fields[{index}]: {e}"))?;
+                fields.push(field);
+            }
+            Ok(Request::FillForm {
+                id,
+                fields,
+                submit: opt_bool(args, "submit").unwrap_or(false),
+                timeout_ms,
+            })
+        }
+        "list_downloads" => Ok(Request::ListDownloads {
+            limit: opt_u64(args, "limit").map(|v| v as usize),
+        }),
+        "drop_file" => Ok(Request::DropFile {
+            id,
+            selector: req_str(args, "selector")?,
+            nth: opt_u32(args, "nth"),
+            contains: opt_str(args, "contains"),
+            path: opt_str(args, "path"),
+            data: opt_str(args, "data"),
+            name: opt_str(args, "name"),
+            mime: opt_str(args, "mime"),
+            timeout_ms,
+        }),
+        "auth_context" => Ok(Request::AuthContext { id }),
+        "fill_login" => Ok(Request::FillLogin {
+            id,
+            kind: match opt_str(args, "kind") {
+                None => hwatu_ipc::LoginFill::Password,
+                Some(v) => hwatu_ipc::LoginFill::parse(&v)
+                    .ok_or_else(|| format!("invalid kind {v:?} (want password|otp)"))?,
+            },
+            host: opt_str(args, "host"),
+            timeout_ms,
+        }),
+        "fork" => Ok(Request::Fork {
+            id,
+            name: opt_str(args, "name"),
+            count: opt_u32(args, "count"),
+            timeout_ms,
+        }),
+        "list_forks" => Ok(Request::ListForks),
+        "try_until" => {
+            let entries = args
+                .get("alternatives")
+                .and_then(Value::as_array)
+                .ok_or("try_until needs `alternatives` array")?;
+            let mut alternatives = Vec::with_capacity(entries.len());
+            for (index, entry) in entries.iter().enumerate() {
+                let tool = entry
+                    .get("tool")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| format!("alternatives[{index}] needs string `tool`"))?;
+                let empty = json!({});
+                let step_args = entry.get("args").unwrap_or(&empty);
+                let action = build_request(tool, step_args)
+                    .map_err(|e| format!("alternatives[{index}] {tool}: {e}"))?;
+                alternatives.push(action);
+            }
+            Request::validate_try_until(&alternatives).map_err(|e| format!("try_until: {e}"))?;
+            Ok(Request::TryUntil {
+                id,
+                alternatives,
+                timeout_ms,
+            })
+        }
+        "scout" => Ok(Request::Scout {
+            url: req_str(args, "url")?,
+            depth: opt_u32(args, "depth"),
+            max_pages: opt_u32(args, "max_pages"),
+            filter: opt_str(args, "filter"),
+            budget: opt_u64(args, "budget").map(|v| v as usize),
+            profile: opt_str(args, "profile"),
+            timeout_ms,
+        }),
         other => Err(format!("unknown tool: {other}")),
     }
 }
@@ -1014,6 +1110,149 @@ pub(crate) fn tool_definitions() -> Vec<Value> {
             json!({ "id": prop("integer", "Window id to close.") }),
             &["id"],
         ),
+        tool(
+            "get_content",
+            "Extract page content in one call: visible text (default), outer \
+             HTML, title+url, or de-duplicated links. Optionally scoped to one \
+             element by selector. Cheaper than eval for plain extraction.",
+            json!({
+                "id": prop("integer", ID_DESC),
+                "format": { "type": "string", "enum": ["text", "html", "title", "links"],
+                    "description": "What to return (default text)." },
+                "selector": prop("string", "Scope extraction to this element instead of the document."),
+                "nth": prop("integer", "0-based index among selector matches (default 0)."),
+                "contains": prop("string", "Keep only selector matches whose text contains this."),
+                "max_chars": prop("integer", "Character budget for text/html output (default 65536)."),
+            }),
+            &[],
+        ),
+        tool(
+            "fill_form",
+            "Fill several form fields in one roundtrip: each field targets an \
+             element (selector or snapshot ref) and sets a text value, a \
+             select option, or a checkbox/radio state, with framework-safe \
+             events. Fields apply in order; the reply reports which landed. \
+             With submit, the last field's form is submitted afterwards.",
+            json!({
+                "id": prop("integer", ID_DESC),
+                "fields": { "type": "array", "items": { "type": "object", "properties": {
+                    "selector": prop("string", "CSS selector for the field."),
+                    "nth": prop("integer", "0-based index among matches."),
+                    "contains": prop("string", "Keep only matches whose text contains this."),
+                    "ref": prop("integer", "Interactable index from the last snapshot (instead of selector)."),
+                    "value": prop("string", "Text to type or select option (value or label)."),
+                    "checked": prop("boolean", "Checkbox/radio state (instead of value)."),
+                }},
+                    "description": "Fields to fill, in order." },
+                "submit": prop("boolean", "Submit the last field's form after filling."),
+            }),
+            &["fields"],
+        ),
+        tool(
+            "list_downloads",
+            "List downloads this daemon session started: url, destination, \
+             state (active/finished/failed), originating window.",
+            json!({
+                "limit": prop("integer", "Return at most the last N entries."),
+            }),
+            &[],
+        ),
+        tool(
+            "drop_file",
+            "Simulate dropping a file onto an element (drag-and-drop upload \
+             zones without an <input type=file>): dispatches dragenter/\
+             dragover/drop with a real DataTransfer, and also feeds any \
+             embedded file input.",
+            json!({
+                "id": prop("integer", ID_DESC),
+                "selector": prop("string", "Drop target element."),
+                "nth": prop("integer", "0-based index among matches."),
+                "contains": prop("string", "Keep only matches whose text contains this."),
+                "path": prop("string", "File path readable by the daemon."),
+                "name": prop("string", "File name presented to the page (default: basename)."),
+                "mime": prop("string", "MIME type presented to the page (default: guessed)."),
+            }),
+            &["selector", "path"],
+        ),
+        tool(
+            "fill_login",
+            "Fill the page's login form from the user's password manager \
+             (pass or Bitwarden CLI): kind=password fills username+password, \
+             kind=otp fills the one-time-code field from pass-otp / bw totp. \
+             Secrets go into the page only; the reply never contains them. \
+             The headless answer to 2FA: enroll the agent profile's TOTP \
+             secret once, fill codes forever.",
+            json!({
+                "id": prop("integer", ID_DESC),
+                "kind": { "type": "string", "enum": ["password", "otp"],
+                    "description": "What to fill (default password)." },
+                "host": prop("string", "Override the store-lookup host (default: page host)."),
+            }),
+            &[],
+        ),
+        tool(
+            "auth_context",
+            "Report login/session state for a window's origin: cookie names \
+             and counts (values never leave the page), localStorage keys, and \
+             a likely_authenticated heuristic. Use before attempting a flow \
+             to decide between proceeding and a handoff.",
+            json!({ "id": prop("integer", ID_DESC) }),
+            &[],
+        ),
+        tool(
+            "fork",
+            "Duplicate a live window: new headless window(s) on the same \
+             cookie profile navigated to the same URL. Try risky or \
+             alternative paths on the fork while the original keeps its \
+             state; close forks with close.",
+            json!({
+                "id": prop("integer", "Source window (defaults like other id-less calls)."),
+                "name": prop("string", "Label reported by list_forks."),
+                "count": prop("integer", "How many forks (default 1, max 8)."),
+            }),
+            &[],
+        ),
+        tool(
+            "list_forks",
+            "List live forked windows: id, name, parent, url.",
+            json!({}),
+            &[],
+        ),
+        tool(
+            "try_until",
+            "Try alternative actions in order until one succeeds: each \
+             alternative is a {tool, args} pair (click, type_text, or expect). \
+             Returns the winning alternative's index and result, or every \
+             failure. The one-call answer to 'the button is one of these \
+             selectors'.",
+            json!({
+                "id": prop("integer", ID_DESC),
+                "alternatives": { "type": "array", "items": { "type": "object", "properties": {
+                    "tool": prop("string", "click | type_text | expect"),
+                    "args": { "type": "object", "description": "That tool's arguments." },
+                }},
+                    "description": "Candidate actions, tried in order (max 8)." },
+                "timeout_ms": prop("integer", "Overall deadline (default 5000)."),
+            }),
+            &["alternatives"],
+        ),
+        tool(
+            "scout",
+            "Bounded same-host crawl: load a URL headlessly, harvest \
+             text/title/links, follow same-host links up to depth/max_pages \
+             on one warm window, and return per-page results. Reconnaissance \
+             in one call, zero focus changes.",
+            json!({
+                "url": prop("string", "Start URL (https:// implied)."),
+                "depth": prop("integer", "Link-following depth (default 1, max 2)."),
+                "max_pages": prop("integer", "Total page budget (default 5, max 10)."),
+                "filter": prop("string", "Only follow links whose URL or text contains this."),
+                "budget": prop("integer", "Character budget per page snapshot (default 2000)."),
+                "profile": prop("string", "Cookie/site-data profile for the crawl."),
+                "timeout_ms": prop("integer", "Deadline for the whole crawl (default 60000)."),
+            }),
+            &["url"],
+        ),
     ]
 }
 
@@ -1287,6 +1526,16 @@ mod tests {
             "unfocus": { "id": 1 },
             "close": { "id": 1 },
             "subscribe_events": {},
+            "get_content": {},
+            "fill_form": { "fields": [{ "selector": "input", "value": "x" }] },
+            "list_downloads": {},
+            "drop_file": { "selector": ".dropzone", "path": "/tmp/x" },
+            "auth_context": {},
+            "fill_login": {},
+            "fork": {},
+            "list_forks": {},
+            "try_until": { "alternatives": [{ "tool": "click", "args": { "ref": 0 } }] },
+            "scout": { "url": "example.com" },
         });
         for def in tool_definitions() {
             let name = def["name"].as_str().unwrap();

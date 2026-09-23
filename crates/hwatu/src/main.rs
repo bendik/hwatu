@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
+#![recursion_limit = "256"]
 //! hana: thin client for the hwatud browser daemon.
 //!
 //! `hana <url>` opens a window in ~1 IPC roundtrip. If no daemon is
@@ -55,6 +56,9 @@ pub(crate) fn normalize_request_paths(request: &mut Request) {
         }
         Request::Upload { path, .. } => {
             *path = resolve_path(Some(std::mem::take(path))).expect("path is present");
+        }
+        Request::DropFile { path, .. } => {
+            *path = resolve_path(path.take());
         }
         Request::Diff {
             baseline, heatmap, ..
@@ -233,6 +237,63 @@ fn parse(args: &[String]) -> Result<Request, String> {
     Ok(request)
 }
 
+/// `--field` spec: `<selector>=<value>` types/selects,
+/// `<selector>:checked=<true|false>` sets a checkbox/radio.
+/// The first unescaped `=` splits; selectors containing `=` (attribute
+/// selectors) keep working because those live inside brackets and the
+/// split searches outside bracket pairs only.
+fn parse_form_field(spec: &str) -> Result<hwatu_ipc::FormField, String> {
+    let mut depth = 0u32;
+    let mut split = None;
+    for (i, c) in spec.char_indices() {
+        match c {
+            '[' => depth += 1,
+            ']' => depth = depth.saturating_sub(1),
+            '=' if depth == 0 => {
+                split = Some(i);
+                break;
+            }
+            _ => {}
+        }
+    }
+    let Some(eq) = split else {
+        return Err(format!(
+            "--field {spec:?}: expected <selector>=<value> or <selector>:checked=<true|false>"
+        ));
+    };
+    let (target, value) = (&spec[..eq], &spec[eq + 1..]);
+    if let Some(selector) = target.strip_suffix(":checked") {
+        let checked = match value {
+            "true" | "1" | "on" => true,
+            "false" | "0" | "off" => false,
+            _ => {
+                return Err(format!(
+                    "--field {spec:?}: checked wants true|false, got {value:?}"
+                ))
+            }
+        };
+        return Ok(hwatu_ipc::FormField {
+            selector: Some(selector.to_string()),
+            nth: None,
+            contains: None,
+            r#ref: None,
+            value: None,
+            checked: Some(checked),
+        });
+    }
+    if target.trim().is_empty() {
+        return Err(format!("--field {spec:?}: empty selector"));
+    }
+    Ok(hwatu_ipc::FormField {
+        selector: Some(target.to_string()),
+        nth: None,
+        contains: None,
+        r#ref: None,
+        value: Some(value.to_string()),
+        checked: None,
+    })
+}
+
 /// Coding agents mark their subprocess environment; a human's shell or
 /// WM keybind has none of these. Opens from an agent default to
 /// `Headless` so verification flows never appear in the WM at all,
@@ -384,6 +445,16 @@ fn parse_with_default_mode(args: &[String], default_mode: OpenMode) -> Result<Re
     let mut expect_watch = false;
     let mut mode = default_mode;
     let mut trusted = false;
+    let mut format_arg: Option<String> = None;
+    let mut max_chars: Option<usize> = None;
+    let mut fields: Vec<hwatu_ipc::FormField> = Vec::new();
+    let mut submit = false;
+    let mut name_arg: Option<String> = None;
+    let mut count: Option<u32> = None;
+    let mut mime: Option<String> = None;
+    let mut depth: Option<u32> = None;
+    let mut max_pages: Option<u32> = None;
+    let mut filter: Option<String> = None;
     let mut rest: Vec<&String> = Vec::new();
     let mut it = args.iter();
     while let Some(arg) = it.next() {
@@ -448,6 +519,84 @@ fn parse_with_default_mode(args: &[String], default_mode: OpenMode) -> Result<Re
             no_clear = true;
         } else if arg == "--enter" || arg == "--submit" {
             enter = true;
+            submit = true;
+        } else if arg == "--format" {
+            format_arg = Some(
+                it.next()
+                    .filter(|v| !v.trim().is_empty())
+                    .ok_or("usage: --format <text|html|title|links>")?
+                    .clone(),
+            );
+        } else if let Some(v) = arg.strip_prefix("--format=") {
+            format_arg = Some(v.to_string());
+        } else if arg == "--max-chars" {
+            max_chars = Some(
+                it.next()
+                    .and_then(|v| v.parse().ok())
+                    .ok_or("usage: --max-chars <n>")?,
+            );
+        } else if let Some(v) = arg.strip_prefix("--max-chars=") {
+            max_chars = Some(v.parse().map_err(|_| "usage: --max-chars=<n>")?);
+        } else if arg == "--field" {
+            // --field <selector>=<value>  |  --field <selector>:checked=<true|false>
+            let spec = it
+                .next()
+                .filter(|v| !v.trim().is_empty())
+                .ok_or("usage: --field <selector>=<value>")?;
+            fields.push(parse_form_field(spec)?);
+        } else if let Some(v) = arg.strip_prefix("--field=") {
+            fields.push(parse_form_field(v)?);
+        } else if arg == "--name" {
+            name_arg = Some(
+                it.next()
+                    .filter(|v| !v.trim().is_empty())
+                    .ok_or("usage: --name <name>")?
+                    .clone(),
+            );
+        } else if let Some(v) = arg.strip_prefix("--name=") {
+            name_arg = Some(v.to_string());
+        } else if arg == "--count" {
+            count = Some(
+                it.next()
+                    .and_then(|v| v.parse().ok())
+                    .ok_or("usage: --count <n>")?,
+            );
+        } else if let Some(v) = arg.strip_prefix("--count=") {
+            count = Some(v.parse().map_err(|_| "usage: --count=<n>")?);
+        } else if arg == "--mime" {
+            mime = Some(
+                it.next()
+                    .filter(|v| !v.trim().is_empty())
+                    .ok_or("usage: --mime <type>")?
+                    .clone(),
+            );
+        } else if let Some(v) = arg.strip_prefix("--mime=") {
+            mime = Some(v.to_string());
+        } else if arg == "--depth" {
+            depth = Some(
+                it.next()
+                    .and_then(|v| v.parse().ok())
+                    .ok_or("usage: --depth <n>")?,
+            );
+        } else if let Some(v) = arg.strip_prefix("--depth=") {
+            depth = Some(v.parse().map_err(|_| "usage: --depth=<n>")?);
+        } else if arg == "--max-pages" {
+            max_pages = Some(
+                it.next()
+                    .and_then(|v| v.parse().ok())
+                    .ok_or("usage: --max-pages <n>")?,
+            );
+        } else if let Some(v) = arg.strip_prefix("--max-pages=") {
+            max_pages = Some(v.parse().map_err(|_| "usage: --max-pages=<n>")?);
+        } else if arg == "--filter" {
+            filter = Some(
+                it.next()
+                    .filter(|v| !v.trim().is_empty())
+                    .ok_or("usage: --filter <text>")?
+                    .clone(),
+            );
+        } else if let Some(v) = arg.strip_prefix("--filter=") {
+            filter = Some(v.to_string());
         } else if arg == "--limit" {
             limit = Some(
                 it.next()
@@ -716,6 +865,34 @@ fn parse_with_default_mode(args: &[String], default_mode: OpenMode) -> Result<Re
             until: until.unwrap_or_default(),
             timeout_ms,
         }),
+        Some("try-until") | Some("try") => {
+            const USAGE_TRY: &str =
+                "usage: hwatu try-until (--stdin | '<json-array-of-actions>') [--timeout-ms <ms>]";
+            let payload = if use_stdin {
+                let mut payload = String::new();
+                std::io::Read::read_to_string(&mut std::io::stdin().lock(), &mut payload)
+                    .map_err(|e| format!("try-until: cannot read stdin: {e}"))?;
+                payload
+            } else {
+                let payload = rest[1..]
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                if payload.trim().is_empty() {
+                    return Err(USAGE_TRY.into());
+                }
+                payload
+            };
+            let alternatives: Vec<Request> = serde_json::from_str(&payload)
+                .map_err(|e| format!("try-until: invalid JSON: {e}"))?;
+            Request::validate_try_until(&alternatives).map_err(|e| format!("try-until: {e}"))?;
+            Ok(Request::TryUntil {
+                id,
+                alternatives,
+                timeout_ms,
+            })
+        }
         Some("batch") => {
             const USAGE_BATCH: &str = "usage: hwatu batch (--stdin | '<json-array>' | '{\"cmd\":\"batch\",...}')";
             let payload = if use_stdin {
@@ -1139,6 +1316,98 @@ fn parse_with_default_mode(args: &[String], default_mode: OpenMode) -> Result<Re
             }
             Ok(Request::Jump { query, open: true })
         }
+        Some("content") | Some("get-content") => {
+            let format = match format_arg.as_deref() {
+                Some(v) => hwatu_ipc::ContentFormat::parse(v)
+                    .ok_or("usage: --format <text|html|title|links>")?,
+                None => hwatu_ipc::ContentFormat::default(),
+            };
+            Ok(Request::GetContent {
+                id,
+                format,
+                selector: rest.get(1).map(|s| s.to_string()),
+                nth,
+                contains,
+                max_chars,
+                timeout_ms,
+            })
+        }
+        Some("fill") | Some("fill-form") => {
+            if fields.is_empty() {
+                return Err(
+                    "usage: hwatu fill --field <selector>=<value> [--field ...] [--submit] \
+                     (checkbox: --field '<selector>:checked=true')"
+                        .into(),
+                );
+            }
+            Ok(Request::FillForm {
+                id,
+                fields,
+                submit,
+                timeout_ms,
+            })
+        }
+        Some("downloads") => Ok(Request::ListDownloads { limit }),
+        Some("drop") | Some("drop-file") => {
+            let selector = rest
+                .get(1)
+                .ok_or("usage: hwatu drop <selector> <path> [--name <n>] [--mime <t>]")?
+                .to_string();
+            let path = rest
+                .get(2)
+                .ok_or("usage: hwatu drop <selector> <path> [--name <n>] [--mime <t>]")?
+                .to_string();
+            Ok(Request::DropFile {
+                id,
+                selector,
+                nth,
+                contains,
+                path: Some(path),
+                data: None,
+                name: name_arg,
+                mime,
+                timeout_ms,
+            })
+        }
+        Some("auth") | Some("auth-context") => Ok(Request::AuthContext { id }),
+        Some("fill-login") | Some("login") => {
+            let kind = match rest.get(1).map(|s| s.as_str()) {
+                None => hwatu_ipc::LoginFill::Password,
+                Some(v) => hwatu_ipc::LoginFill::parse(v)
+                    .ok_or("usage: hwatu fill-login [password|otp] [--id <id>]")?,
+            };
+            Ok(Request::FillLogin {
+                id,
+                kind,
+                host: filter.take(),
+                timeout_ms,
+            })
+        }
+        Some("fork") => Ok(Request::Fork {
+            id: rest.get(1).and_then(|s| s.parse().ok()).or(id),
+            name: name_arg,
+            count,
+            timeout_ms,
+        }),
+        Some("forks") => Ok(Request::ListForks),
+        Some("scout") => {
+            let url = rest
+                .get(1)
+                .ok_or(
+                    "usage: hwatu scout <url> [--depth <n>] [--max-pages <n>] [--filter <text>] \
+                     [--budget <chars>] [--profile <name>]",
+                )?
+                .to_string();
+            Ok(Request::Scout {
+                url,
+                depth,
+                max_pages,
+                filter,
+                budget,
+                profile,
+                timeout_ms,
+            })
+        }
         Some("focus") => {
             let id = rest
                 .get(1)
@@ -1241,6 +1510,15 @@ const USAGE: &str = "usage: hwatu [--app-id <id>] [--profile <name|auto>] [--bac
 | clear-site-data [<host>] \
 | handoff <id> --reason <text> [--now] | handoffs [<id>] \
 | jump <query> \
+| content [<selector>] [--format (text|html|title|links)] [--max-chars <n>] [--id <id>] \
+| fill --field <selector>=<value> [--field '<sel>:checked=true' ...] [--submit] [--id <id>] \
+| downloads [--limit <n>] \
+| drop <selector> <path> [--name <name>] [--mime <type>] [--id <id>] \
+| auth [--id <id>] \
+| fill-login [password|otp] [--id <id>] \
+| fork [<id>] [--name <label>] [--count <n>] | forks \
+| try-until (--stdin | '<json-action-array>') [--timeout-ms <ms>] [--id <id>] \
+| scout <url> [--depth <n>] [--max-pages <n>] [--filter <text>] [--budget <chars>] [--profile <name>] \
 | expect [--id <id>] <selector> [--contains <filter>] [--text <substring>] [--absent] [--visible] [--nth <n>] [--timeout-ms <ms>] [--watch] \
 	| click [--id <id>] [--trusted] (<selector> [nth] [--contains <text>] | --ref <n>) \
 	| type [--id <id>] [--trusted] (<selector> | --ref <n>) <text> [--enter] [--no-clear] \

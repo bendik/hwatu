@@ -20,6 +20,52 @@ use webkit6::prelude::*;
 /// Deferred response writer, callable exactly once.
 pub type Reply = Box<dyn FnOnce(Response)>;
 
+/// Send one response through a fresh once-guard. For modules
+/// (coverage.rs) that need the early-error path without borrowing the
+/// OnceReply internals.
+pub fn send_once(reply: Reply, response: Response) {
+    OnceReply::new(reply).send(response);
+}
+
+/// Wrap a one-shot reply into a callable that tolerates multiple
+/// invocations (first wins). The coverage verbs' orchestration
+/// (try_until, fork) share it across closures.
+pub fn once(reply: Reply) -> Rc<dyn Fn(Response)> {
+    let guard = OnceReply::new(reply);
+    Rc::new(move |response| guard.send(response))
+}
+
+/// Run `done` once window `id` finishes loading (or `timeout_ms`
+/// expires, whichever first — done runs either way; the caller
+/// decides what "loaded enough" means afterwards).
+pub fn after_load(
+    daemon: &Rc<Daemon>,
+    id: u64,
+    timeout_ms: Option<u64>,
+    done: Box<dyn FnOnce()>,
+) {
+    let done = Rc::new(RefCell::new(Some(done)));
+    let fire = {
+        let done = done.clone();
+        move || {
+            if let Some(f) = done.borrow_mut().take() {
+                f();
+            }
+        }
+    };
+    let reply: Reply = Box::new({
+        let fire = fire.clone();
+        move |_| fire()
+    });
+    wait_load(
+        daemon,
+        Some(id),
+        hwatu_ipc::LoadStage::Settled,
+        timeout_ms,
+        reply,
+    );
+}
+
 /// A `Reply` that several racing callbacks (signal, timeout, cancel)
 /// can share; only the first `send` wins.
 #[derive(Clone)]
@@ -67,7 +113,7 @@ const VIEWPORT_PUMP_JS: &str = "__hwatuNative?.pumpViewport?.();";
 /// normal state for background/headless verification flows).
 /// Genuine ambiguity is still an error rather than a guess: an agent
 /// driving the wrong window is worse than a retry with an id.
-fn resolve(daemon: &Rc<Daemon>, id: Option<u64>) -> Result<Rc<BrowserWindow>, Box<Response>> {
+pub(crate) fn resolve(daemon: &Rc<Daemon>, id: Option<u64>) -> Result<Rc<BrowserWindow>, Box<Response>> {
     let win = resolve_uncached(daemon, id)?;
     daemon.last_target.replace(Some(win.id));
     Ok(win)
@@ -104,7 +150,7 @@ fn resolve_uncached(
 /// Live WebView of a window, reviving it from a discard first and
 /// re-asserting the offscreen viewport for headless windows (GTK can
 /// re-allocate an unmapped toplevel to 0x0 behind our back).
-fn live_view(win: &Rc<BrowserWindow>) -> Result<webkit6::WebView, Box<Response>> {
+pub(crate) fn live_view(win: &Rc<BrowserWindow>) -> Result<webkit6::WebView, Box<Response>> {
     win.restore();
     win.ensure_viewport();
     win.live_webview()
@@ -1938,7 +1984,7 @@ return {{
 }
 
 /// JS literal for an optional string: a JSON string or `null`.
-fn json_or_null(s: Option<&str>) -> String {
+pub(crate) fn json_or_null(s: Option<&str>) -> String {
     s.map_or("null".into(), js_string)
 }
 
@@ -2634,7 +2680,7 @@ return {
 /// by selector + nth/contains (same disambiguation as scroll). Leaves
 /// `el` (the element) and `matched` (the landing report) in scope, or
 /// throws with an explanation an agent can act on.
-fn target_prelude(
+pub(crate) fn target_prelude(
     selector: Option<&str>,
     nth: Option<u32>,
     contains: Option<&str>,
@@ -3328,7 +3374,7 @@ pub fn net(daemon: &Rc<Daemon>, id: Option<u64>, clear: bool, limit: Option<usiz
 }
 
 /// JSON string literal, which is also a valid JS string literal.
-fn js_string(s: &str) -> String {
+pub(crate) fn js_string(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_else(|_| "\"\"".into())
 }
 

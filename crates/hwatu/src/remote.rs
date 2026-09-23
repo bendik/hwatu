@@ -114,6 +114,14 @@ pub(crate) fn prepare(request: &mut Request) -> Result<Artifacts, String> {
                 *data = Some(read_inline_file(path, "upload")?);
             }
         }
+        Request::DropFile { path, data, .. } => {
+            if data.is_none() {
+                let Some(path) = path.as_deref() else {
+                    return Err("drop_file needs path or data".into());
+                };
+                *data = Some(read_inline_file(path, "drop_file")?);
+            }
+        }
         Request::Diff {
             baseline,
             baseline_data,

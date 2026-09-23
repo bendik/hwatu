@@ -609,6 +609,92 @@ fn dispatch(daemon: &Rc<Daemon>, req: Request, transport: TransportKind, reply: 
         Request::Eval { id, js, timeout_ms } => {
             return automation::eval(daemon, id, js, timeout_ms, reply);
         }
+        Request::GetContent {
+            id,
+            format,
+            selector,
+            nth,
+            contains,
+            max_chars,
+            timeout_ms,
+        } => {
+            return crate::coverage::get_content(
+                daemon, id, format, selector, nth, contains, max_chars, timeout_ms, reply,
+            );
+        }
+        Request::FillForm {
+            id,
+            fields,
+            submit,
+            timeout_ms,
+        } => {
+            return crate::coverage::fill_form(daemon, id, fields, submit, timeout_ms, reply);
+        }
+        Request::DropFile {
+            id,
+            selector,
+            nth,
+            contains,
+            path,
+            data,
+            name,
+            mime,
+            timeout_ms,
+        } => {
+            if transport == TransportKind::Tcp && data.is_none() {
+                return reply(Response::err("TCP drop_file requires inline file data"));
+            }
+            return crate::coverage::drop_file(
+                daemon, id, selector, nth, contains, path, data, name, mime, timeout_ms, reply,
+            );
+        }
+        Request::AuthContext { id } => {
+            return crate::coverage::auth_context(daemon, id, reply);
+        }
+        Request::FillLogin {
+            id,
+            kind,
+            host,
+            timeout_ms,
+        } => {
+            return crate::coverage::fill_login(daemon, id, kind, host, timeout_ms, reply);
+        }
+        Request::Fork {
+            id,
+            name,
+            count,
+            timeout_ms,
+        } => {
+            return crate::coverage::fork(daemon, id, name, count, timeout_ms, reply);
+        }
+        Request::TryUntil {
+            id,
+            alternatives,
+            timeout_ms,
+        } => {
+            return crate::coverage::try_until(daemon, id, alternatives, timeout_ms, reply);
+        }
+        Request::Scout {
+            url,
+            depth,
+            max_pages,
+            filter,
+            budget,
+            profile,
+            timeout_ms,
+        } => {
+            return crate::coverage::scout(
+                daemon,
+                normalize_url(url),
+                depth,
+                max_pages,
+                filter,
+                budget,
+                profile,
+                timeout_ms,
+                reply,
+            );
+        }
         Request::Navigate {
             id,
             url,
@@ -1210,6 +1296,30 @@ fn dispatch(daemon: &Rc<Daemon>, req: Request, transport: TransportKind, reply: 
             }
             Response::adblock(daemon.adblock.status())
         }
+        Request::ListDownloads { limit } => {
+            let entries: Vec<_> = daemon
+                .downloads
+                .list(limit)
+                .into_iter()
+                .map(|d| {
+                    serde_json::json!({
+                        "id": d.id,
+                        "url": d.url,
+                        "destination": d.destination,
+                        "state": d.state,
+                        "error": d.error,
+                        "window": d.window,
+                        "started_at": d
+                            .started_at
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|t| t.as_secs())
+                            .unwrap_or(0),
+                    })
+                })
+                .collect();
+            Response::value(serde_json::json!({ "downloads": entries }))
+        }
+        Request::ListForks => crate::coverage::list_forks(daemon),
         Request::Quit => {
             // Reply first, then exit from an idle callback so the response
             // actually reaches the client before the process dies.
@@ -1254,6 +1364,14 @@ fn dispatch(daemon: &Rc<Daemon>, req: Request, transport: TransportKind, reply: 
         | Request::Diff { .. }
         | Request::Resize { .. }
         | Request::ClearSiteData { .. }
+        | Request::GetContent { .. }
+        | Request::FillForm { .. }
+        | Request::DropFile { .. }
+        | Request::AuthContext { .. }
+        | Request::Fork { .. }
+        | Request::TryUntil { .. }
+        | Request::Scout { .. }
+        | Request::FillLogin { .. }
         | Request::Expect { .. } => Response::err("internal: async request in sync path"),
         // Handled above; reaching here means an internal misroute.
         Request::Batch { .. } => Response::err("internal: batch in sync path"),
