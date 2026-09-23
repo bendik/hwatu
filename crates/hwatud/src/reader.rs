@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Reader mode (roadmap H34): extract the page's main article and
 //! re-render it with clean typography. Safari's signature feature,

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Keybindings: every global key in hwatu maps to a named [`Action`]
 //! through a [`Keymap`], so users can rebind anything.

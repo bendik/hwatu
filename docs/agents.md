@@ -1,25 +1,23 @@
 # hwatu for coding agents
 
-hwatu is a visual verification harness for coding agents: a warm
+hwatu is a headless verification harness for coding agents: a warm
 WebKit daemon where opening, driving, and closing a real rendered
-browser window costs about as much as running `ls`. This is Hwatu's
-primary use case, not a side feature. Its plan of record is the
-[AI verification roadmap](roadmaps/verification.md), under the shared
-[portfolio roadmap](roadmap.md).
+page costs about as much as running `ls`. Jcode drives it natively as
+its `browser` backend; everything else connects over MCP or CLI. Plan
+of record: the [AI verification roadmap](roadmaps/verification.md).
 
 It is not a scraping browser. If you need to crawl the web at scale,
 use a headless-Chrome fleet or Lightpanda. hwatu is for the inner
-loop of frontend development: an agent edits code, opens the page,
-checks it, and moves on, dozens of times an hour, on the same
-machine the human is working on.
+loop of frontend development: an agent edits code, opens the page
+headlessly, checks it, and moves on, dozens of times an hour, on the
+same machine the human is working on.
 
 ## Why agents like it
 
 - **13-16 ms window spawn** from a warm daemon, measured medians
-  across focused/background/headless modes
-  ([benchmarks](benchmarks.md)). Verification loops spawn and
-  discard windows constantly; hwatu keeps the whole loop (open,
-  load, read, screenshot, close) under ~200 ms with zero setup.
+  ([benchmarks](benchmarks.md)). Verification loops spawn and discard
+  windows constantly; hwatu keeps the whole loop (open, load, read,
+  screenshot, close) under ~200 ms with zero setup.
 - **One shared engine, zero supply chain.** N windows share one
   WebKit network process and a prewarm pool (~56 MB per extra
   window). One static binary plus the distro's webkitgtk: no Node,
@@ -27,13 +25,13 @@ machine the human is working on.
 - **Real rendering.** Full WebKit: layout, CSS, WebGL, media.
   Screenshots show what a user would see. (Contrast with
   render-less automation engines, which are fast but blind.)
-- **No focus stealing.** `--background` maps a window without an
-  activation request; `--headless` never maps one at all. The human
-  keeps typing while the agent verifies. The CLI even defaults to
-  headless when it detects a coding-agent environment (markers
-  like `CLAUDECODE`, `JCODE_SOCKET`, `CURSOR_AGENT`), so a forgotten
-  flag never puts a window in the user's WM; `--focus` opts back in,
-  and `HWATU_AGENT_MODE` / `"agent_mode"` in
+- **Headless by default for agents.** `--headless` never maps a
+  window; `--background` maps one without an activation request. The
+  human keeps typing while the agent verifies. The CLI defaults to
+  headless when it detects a coding-agent environment (markers like
+  `CLAUDECODE`, `JCODE_SOCKET`, `CURSOR_AGENT`), so a forgotten flag
+  never puts a window in the user's WM; `--focus` opts back in, and
+  `HWATU_AGENT_MODE` / `"agent_mode"` in
   `~/.config/hwatu/config.json` tune the agent default
   (`normal` | `background` | `headless`).
 - **Human hand-off.** Every headless/background window is a live

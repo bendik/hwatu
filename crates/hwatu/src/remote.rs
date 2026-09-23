@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Translate client-local artifacts to and from inline TCP payloads.
 
@@ -112,6 +112,14 @@ pub(crate) fn prepare(request: &mut Request) -> Result<Artifacts, String> {
         Request::Upload { path, data, .. } => {
             if data.is_none() {
                 *data = Some(read_inline_file(path, "upload")?);
+            }
+        }
+        Request::DropFile { path, data, .. } => {
+            if data.is_none() {
+                let Some(path) = path.as_deref() else {
+                    return Err("drop_file needs path or data".into());
+                };
+                *data = Some(read_inline_file(path, "drop_file")?);
             }
         }
         Request::Diff {

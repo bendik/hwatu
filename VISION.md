@@ -119,6 +119,27 @@ Apple-standard directories. Focus/unfocus must operate on the same `WKWebView`
 and avoid activating the app for agent-only work. Distribution is a signed and
 notarized universal application/CLI package.
 
+Feasibility is measured, not assumed. Probes in
+[`scripts/probes/macos/`](scripts/probes/macos/) establish these constraints;
+the analysis and competitive reasoning are in
+[`docs/research-macos-headless.md`](docs/research-macos-headless.md).
+
+- An unbundled CLI binary with `NSApplication.activationPolicy = .prohibited`
+  can load, evaluate, and snapshot an offscreen `WKWebView` with no dock icon
+  and no focus steal. Warm eval is under 1 ms and warm snapshot is 2 ms, so the
+  warm-service architecture transfers intact.
+- **`requestAnimationFrame` is throttled to 0-1 fps whenever the view is
+  offscreen or occluded**, and no window-level trick recovers it. macOS
+  therefore reports `motion.realtime` as degraded. Readiness must never depend
+  on frame counts. Deterministic WAAPI seek does render the sought instant
+  offscreen, so the verification instrument keeps working; realtime motion and
+  scroll-feel work only mean anything in a visible window.
+- `takeSnapshot` is viewport-only. Full-document capture has no direct peer for
+  WebKitGTK's `SnapshotRegion::FullDocument` and needs an explicit strategy.
+- A logged-in GUI session appears to be required. Hosting `WKWebView` on a
+  GUI-less macOS CI runner is unproven and must be verified or documented as
+  unsupported rather than implied.
+
 ### Windows
 
 WebView2 runs inside a Win32 host using the installed Evergreen runtime. The
@@ -205,6 +226,14 @@ unfocus → close`.
 **Exit gate:** that path runs on physical or hosted native runners, uses the same
 CLI commands and JSON assertions as Linux, does not steal focus before `focus`,
 and keeps the same page identity and session state through hand-off.
+
+On macOS the slice is scoped to the verification instrument first: a warm,
+focusless `check`/`diff` against a baseline, shipped without the browser shell.
+That is the capability no competitor offers, and it is the part of the codebase
+that touches native types least. The tiling-WM browser is explicitly not a macOS
+target: there is no tiling WM to serve, and offscreen rAF throttling makes the
+scroll-feel work meaningless there. See
+[`docs/research-macos-headless.md`](docs/research-macos-headless.md).
 
 ### M3: reach agent-loop parity
 

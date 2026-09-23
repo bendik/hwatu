@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Open compatibility-blocked pages in an installed non-WebKit browser.
 //!

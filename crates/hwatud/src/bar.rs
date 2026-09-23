@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! The prompt surface: hwatu's single piece of chrome, a small
 //! monochrome command surface overlaid near the top of the window,

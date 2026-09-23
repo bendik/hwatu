@@ -22,6 +22,12 @@ share product policy. The browser may optimize human navigation without adding
 browser-shell concepts to agent verification; verification may optimize
 machine-readable proof without dictating human interaction design.
 
+Platform reach is judged per product, not per OS. macOS is a verification-only
+target: the measured probes and competitive analysis in
+[research-macos-headless.md](research-macos-headless.md) show the instrument
+ports cleanly and is unmatched by competitors, while the browser shell has no
+audience and no working frame clock there.
+
 When shared needs conflict, runtime correctness and compatibility come first,
 then the agent verification loop, then live hand-off, then browser convenience.
 A browser regression that prevents ordinary use is a correctness bug, not a
@@ -48,6 +54,12 @@ external end-to-end harness for important browser journeys.
 | [AI verification](roadmaps/verification.md) | CLI/MCP workflows, snapshots, assertions, diffing, deterministic observation, context hygiene | agents produce reproducible evidence with few calls and bounded context |
 | [Tiling-WM browser](roadmaps/browser.md) | keyboard navigation, human-facing chrome, media, history integration, site usability, WM-native behavior | users can remain in Hwatu instead of switching browsers for ordinary work |
 | [Shared platform](roadmaps/platform.md) | protocol, sessions, pools, native backends, transport, lifecycle, capabilities, hand-off | both products consume one compatible live-session runtime without duplicated machinery |
+
+Shipped 2026-09: [extension-bridge coverage](roadmaps/coverage.md) — the
+verb-by-verb parity pass (frames, content, forms, forking, try-until,
+scouting, downloads, drop-file, auth context, password+TOTP fill) that
+lets hwatu fully replace focus-stealing in-browser extension bridges
+for agent harnesses, headlessly.
 
 The platform is the only upstream. A reusable discovery in either product is
 promoted into a platform capability; code is not periodically copied or pulled

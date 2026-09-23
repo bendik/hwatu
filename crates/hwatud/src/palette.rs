@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Command palette: fuzzy search over every keymap action, so nothing
 //! needs a memorized chord to be reachable. The bar hosts the UI

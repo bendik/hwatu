@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Browser window: one WebView per toplevel, zero chrome.
 //! The tiling WM is the tab bar.
@@ -443,6 +443,13 @@ pub struct BrowserWindow {
     /// for the current entry text, and which (if any) is highlighted.
     /// `None` selection means Enter navigates the typed text.
     completions: RefCell<Option<CompletionState>>,
+    /// Cookie/site-data profile this window was opened with (platform
+    /// item 6). `Fork` reads it so a duplicate shares the source's
+    /// session; None = the daemon default session.
+    pub profile: RefCell<Option<String>>,
+    /// Fork lineage (coverage C3): `(parent window id, fork name,
+    /// created-at)` when this window was created by `Request::Fork`.
+    pub fork_of: RefCell<Option<(u64, String, std::time::SystemTime)>>,
 }
 
 /// See [`BrowserWindow::palette`].
@@ -737,6 +744,12 @@ impl BrowserWindow {
             None => daemon.take_webview(),
         };
         let this = Self::build(daemon, webview.clone(), app_id.clone(), mode);
+        this.profile.replace(
+            profile
+                .as_deref()
+                .filter(|p| !p.is_empty())
+                .map(String::from),
+        );
         // No URL and no configured home page: show the launcher (the
         // keybind cheat sheet) with the URL bar already open, so a
         // bare `hwatu` is "type where you want to go".
@@ -954,6 +967,8 @@ impl BrowserWindow {
             turnstile_handoff_offered: std::cell::Cell::new(false),
             palette: RefCell::new(None),
             completions: RefCell::new(None),
+            profile: RefCell::new(None),
+            fork_of: RefCell::new(None),
         });
 
         this.attach_webview(webview);

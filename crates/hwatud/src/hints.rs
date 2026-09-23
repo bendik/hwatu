@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Link hints (roadmap H10): keyboard navigation to links, qutebrowser
 //! `f` style. Press the hint key, every visible interactable gets a

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Web notifications (roadmap H4): forward WebKit's `show-notification`
 //! to the desktop over D-Bus (`org.freedesktop.Notifications`), and

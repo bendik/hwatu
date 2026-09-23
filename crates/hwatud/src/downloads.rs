@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Justin Hong
 //! Downloads: no dialogs, no manager. Every download goes straight to
 //! the download directory; the bar flashes progress and completion.
@@ -15,6 +15,57 @@ use gtk::prelude::*;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use webkit6::prelude::*;
+
+/// One download's lifecycle record (coverage C5). Kept after
+/// completion so `hwatu downloads` reports history for this daemon
+/// session, bounded by [`REGISTRY_CAP`].
+#[derive(Clone, Debug)]
+pub struct DownloadRecord {
+    pub id: u64,
+    pub url: String,
+    pub destination: Option<String>,
+    /// "active" | "finished" | "failed"
+    pub state: &'static str,
+    pub error: Option<String>,
+    pub window: Option<u64>,
+    pub started_at: std::time::SystemTime,
+}
+
+/// Bounded registry of downloads this daemon session started.
+#[derive(Default)]
+pub struct Registry {
+    entries: std::cell::RefCell<Vec<DownloadRecord>>,
+    next_id: std::cell::Cell<u64>,
+}
+
+const REGISTRY_CAP: usize = 200;
+
+impl Registry {
+    fn insert(&self, mut record: DownloadRecord) -> u64 {
+        let id = self.next_id.get() + 1;
+        self.next_id.set(id);
+        record.id = id;
+        let mut entries = self.entries.borrow_mut();
+        if entries.len() >= REGISTRY_CAP {
+            entries.remove(0);
+        }
+        entries.push(record);
+        id
+    }
+
+    fn update(&self, id: u64, f: impl FnOnce(&mut DownloadRecord)) {
+        if let Some(entry) = self.entries.borrow_mut().iter_mut().find(|e| e.id == id) {
+            f(entry);
+        }
+    }
+
+    /// Newest-last list of the most recent `limit` records.
+    pub fn list(&self, limit: Option<usize>) -> Vec<DownloadRecord> {
+        let entries = self.entries.borrow();
+        let n = limit.unwrap_or(entries.len()).min(entries.len());
+        entries[entries.len() - n..].to_vec()
+    }
+}
 
 pub fn download_dir() -> PathBuf {
     if let Ok(dir) = std::env::var("HWATU_DOWNLOAD_DIR") {
@@ -106,7 +157,21 @@ pub fn wire_session(daemon: &Rc<Daemon>, webview: &webkit6::WebView) {
 }
 
 fn wire_download(daemon: &Rc<Daemon>, download: &webkit6::Download) {
+    let record_id = daemon.downloads.insert(DownloadRecord {
+        id: 0,
+        url: download
+            .request()
+            .and_then(|r| r.uri())
+            .map(|u| u.to_string())
+            .unwrap_or_default(),
+        destination: None,
+        state: "active",
+        error: None,
+        window: owner_window_id(daemon, download),
+        started_at: std::time::SystemTime::now(),
+    });
     // Pick the destination ourselves; never prompt.
+    let registry_daemon = daemon.clone();
     download.connect_decide_destination(move |download, suggested| {
         let dir = download_dir();
         if let Err(e) = std::fs::create_dir_all(&dir) {
@@ -121,6 +186,9 @@ fn wire_download(daemon: &Rc<Daemon>, download: &webkit6::Download) {
         };
         let dest = unique_path(&dir, name);
         download.set_destination(&dest.display().to_string());
+        registry_daemon.downloads.update(record_id, |r| {
+            r.destination = Some(dest.display().to_string())
+        });
         true
     });
 
@@ -131,6 +199,12 @@ fn wire_download(daemon: &Rc<Daemon>, download: &webkit6::Download) {
                 .destination()
                 .map(|d| d.to_string())
                 .unwrap_or_default();
+            daemon.downloads.update(record_id, |r| {
+                if r.state == "active" {
+                    r.state = "finished";
+                }
+                r.destination = Some(dest.clone());
+            });
             daemon.events.emit(
                 "download",
                 owner_window_id(&daemon, download),
@@ -142,6 +216,10 @@ fn wire_download(daemon: &Rc<Daemon>, download: &webkit6::Download) {
     {
         let daemon = daemon.clone();
         download.connect_failed(move |download, error| {
+            daemon.downloads.update(record_id, |r| {
+                r.state = "failed";
+                r.error = Some(error.to_string());
+            });
             daemon.events.emit(
                 "download",
                 owner_window_id(&daemon, download),
