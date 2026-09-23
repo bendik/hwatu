@@ -15,6 +15,9 @@ use std::rc::Rc;
 
 // ---- C2: get_content -------------------------------------------------
 
+// Args mirror Request::GetContent field-for-field: this is a verb handler
+// unpacking a protocol message, not a general-purpose API to slim down.
+#[allow(clippy::too_many_arguments)]
 pub fn get_content(
     daemon: &Rc<Daemon>,
     id: Option<u64>,
@@ -606,7 +609,7 @@ fn try_until_step(state: Rc<TryUntilState>) {
         .as_millis() as u64;
     // Individual alternatives get a short slice of the overall budget
     // so one hung selector cannot eat every other candidate's chance.
-    let per_step = remaining.min(2000).max(1);
+    let per_step = remaining.clamp(1, 2000);
     let kind = alt.kind();
     let state2 = state.clone();
     let step_reply: Reply = Box::new(move |response| match response {
