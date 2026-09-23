@@ -139,12 +139,12 @@ project directly answers an existing discussion.
 
 **Tagline, 60 characters**
 
-> Fast visual verification for AI coding agents
+> Headless UI verification for AI coding agents
 
 **Short description**
 
-> A warm, interruptible browser daemon that gives coding agents one-call visual
-> checks, pixel diffs, structured page state, and live human hand-off.
+> A warm, headless browser daemon that gives coding agents one-call verified
+> page checks, pixel diffs, structured page state, and live human hand-off.
 
 **Suggested categories**
 
