@@ -966,6 +966,58 @@ mod url {
 
 // ---- C6: fill_login --------------------------------------------------
 
+// ---- C1: list_frames -------------------------------------------------
+
+/// Enumerate the frame tree from the top document. Same-origin frames
+/// report their document url/title and are reachable by every
+/// selector-based verb (target_prelude traverses them); cross-origin
+/// frames are listed with `accessible: false`. WebKitGTK's embedder
+/// API has no public cross-origin script entry; claiming otherwise
+/// would be a lie, so the honest capability report is the feature.
+pub fn list_frames(daemon: &Rc<Daemon>, id: Option<u64>, timeout_ms: Option<u64>, reply: Reply) {
+    const JS: &str = r#"
+const frames = [];
+const walk = (doc, parent, depth) => {
+  if (depth > 5) return;
+  for (const el of doc.querySelectorAll('iframe,frame')) {
+    const entry = {
+      index: frames.length,
+      parent,
+      tag: el.localName,
+      name: el.name || null,
+      src: el.src || null,
+      rect: (() => { const r = el.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; })(),
+    };
+    let child = null;
+    try { child = el.contentDocument; } catch (_) {}
+    if (child) {
+      entry.accessible = true;
+      entry.url = child.location ? child.location.href : null;
+      entry.title = child.title || null;
+      frames.push(entry);
+      walk(child, entry.index, depth + 1);
+    } else {
+      entry.accessible = false;
+      entry.origin = (() => { try { return new URL(el.src).origin; } catch (_) { return null; } })();
+      frames.push(entry);
+    }
+  }
+};
+walk(document, null, 0);
+return { url: location.href, frames,
+         note: frames.some(f => !f.accessible)
+           ? 'cross-origin frames are listed but not scriptable from the embedder; selector verbs reach same-origin frames automatically'
+           : undefined };"#;
+    eval_with(
+        daemon,
+        id,
+        JS.to_string(),
+        timeout_ms,
+        NavPolicy::Error,
+        reply,
+    );
+}
+
 /// Agent-facing password/TOTP fill (coverage C6). Same backends and
 /// page JS as the human keybind (`passfill.rs`), but addressable over
 /// IPC and honest in its reply. Secrets go page-ward only.

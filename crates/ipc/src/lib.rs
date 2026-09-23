@@ -1055,6 +1055,20 @@ pub enum Request {
         #[serde(default)]
         timeout_ms: Option<u64>,
     },
+    /// Enumerate the page's frame tree (coverage C1): index, name,
+    /// src, origin, accessibility (same-origin frames expose their
+    /// document; cross-origin frames are listed but marked
+    /// `accessible: false` - WebKitGTK's public embedder API offers
+    /// no cross-origin script entry, and hwatu reports that honestly
+    /// instead of pretending). The returned `frame` indices scope
+    /// [`Request::Eval`]-composed selector actions via the shared
+    /// `frame` parameter on GetContent.
+    ListFrames {
+        #[serde(default)]
+        id: Option<u64>,
+        #[serde(default)]
+        timeout_ms: Option<u64>,
+    },
 }
 
 /// Maximum number of actions in one [`Request::Batch`]. This bounds daemon
@@ -1192,6 +1206,7 @@ impl Request {
             Request::TryUntil { .. } => "try_until",
             Request::Scout { .. } => "scout",
             Request::FillLogin { .. } => "fill_login",
+            Request::ListFrames { .. } => "list_frames",
         }
     }
 

@@ -599,6 +599,7 @@ pub(crate) fn build_request(name: &str, args: &Value) -> Result<Request, String>
             timeout_ms,
         }),
         "list_forks" => Ok(Request::ListForks),
+        "list_frames" => Ok(Request::ListFrames { id, timeout_ms }),
         "try_until" => {
             let entries = args
                 .get("alternatives")
@@ -1219,6 +1220,16 @@ pub(crate) fn tool_definitions() -> Vec<Value> {
             &[],
         ),
         tool(
+            "list_frames",
+            "Enumerate the page's frame tree: index, name, src, rect, and \
+             whether each frame is same-origin accessible. Selector-based \
+             verbs (click, type_text, get_content, fill_form) automatically \
+             reach elements inside accessible frames; cross-origin frames \
+             are listed but not scriptable.",
+            json!({ "id": prop("integer", ID_DESC) }),
+            &[],
+        ),
+        tool(
             "try_until",
             "Try alternative actions in order until one succeeds: each \
              alternative is a {tool, args} pair (click, type_text, or expect). \
@@ -1534,6 +1545,7 @@ mod tests {
             "fill_login": {},
             "fork": {},
             "list_forks": {},
+            "list_frames": {},
             "try_until": { "alternatives": [{ "tool": "click", "args": { "ref": 0 } }] },
             "scout": { "url": "example.com" },
         });

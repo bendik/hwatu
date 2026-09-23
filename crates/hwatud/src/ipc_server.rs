@@ -651,6 +651,9 @@ fn dispatch(daemon: &Rc<Daemon>, req: Request, transport: TransportKind, reply: 
         Request::AuthContext { id } => {
             return crate::coverage::auth_context(daemon, id, reply);
         }
+        Request::ListFrames { id, timeout_ms } => {
+            return crate::coverage::list_frames(daemon, id, timeout_ms, reply);
+        }
         Request::FillLogin {
             id,
             kind,
@@ -1372,6 +1375,7 @@ fn dispatch(daemon: &Rc<Daemon>, req: Request, transport: TransportKind, reply: 
         | Request::TryUntil { .. }
         | Request::Scout { .. }
         | Request::FillLogin { .. }
+        | Request::ListFrames { .. }
         | Request::Expect { .. } => Response::err("internal: async request in sync path"),
         // Handled above; reaching here means an internal misroute.
         Request::Batch { .. } => Response::err("internal: batch in sync path"),

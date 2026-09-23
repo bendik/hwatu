@@ -1390,6 +1390,7 @@ fn parse_with_default_mode(args: &[String], default_mode: OpenMode) -> Result<Re
             timeout_ms,
         }),
         Some("forks") => Ok(Request::ListForks),
+        Some("frames") | Some("list-frames") => Ok(Request::ListFrames { id, timeout_ms }),
         Some("scout") => {
             let url = rest
                 .get(1)
@@ -1516,7 +1517,7 @@ const USAGE: &str = "usage: hwatu [--app-id <id>] [--profile <name|auto>] [--bac
 | drop <selector> <path> [--name <name>] [--mime <type>] [--id <id>] \
 | auth [--id <id>] \
 | fill-login [password|otp] [--id <id>] \
-| fork [<id>] [--name <label>] [--count <n>] | forks \
+| fork [<id>] [--name <label>] [--count <n>] | forks | frames [--id <id>] \
 | try-until (--stdin | '<json-action-array>') [--timeout-ms <ms>] [--id <id>] \
 | scout <url> [--depth <n>] [--max-pages <n>] [--filter <text>] [--budget <chars>] [--profile <name>] \
 | expect [--id <id>] <selector> [--contains <filter>] [--text <substring>] [--absent] [--visible] [--nth <n>] [--timeout-ms <ms>] [--watch] \
