@@ -55,6 +55,12 @@ external end-to-end harness for important browser journeys.
 | [Tiling-WM browser](roadmaps/browser.md) | keyboard navigation, human-facing chrome, media, history integration, site usability, WM-native behavior | users can remain in Hwatu instead of switching browsers for ordinary work |
 | [Shared platform](roadmaps/platform.md) | protocol, sessions, pools, native backends, transport, lifecycle, capabilities, hand-off | both products consume one compatible live-session runtime without duplicated machinery |
 
+Shipped 2026-09: [extension-bridge coverage](roadmaps/coverage.md) — the
+verb-by-verb parity pass (frames, content, forms, forking, try-until,
+scouting, downloads, drop-file, auth context, password+TOTP fill) that
+lets hwatu fully replace focus-stealing in-browser extension bridges
+for agent harnesses, headlessly.
+
 The platform is the only upstream. A reusable discovery in either product is
 promoted into a platform capability; code is not periodically copied or pulled
 from one product into the other.
